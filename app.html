@@ -393,7 +393,9 @@ const TAMANO = { tabla: [2650, 1900], esfera: [1950, 1950], helice: [2100, 1350]
 let transicion = null;
 function distanciaParaVer([w, h]) {
   const t = Math.tan(THREE.MathUtils.degToRad(camara.fov / 2));
-  return Math.max(w / 2 / (t * camara.aspect), h / 2 / t) * 1.08;
+  // La cabecera y el pie tapan unos 250 px de alto: la tabla cabe en el hueco que dejan.
+  const libre = Math.max(0.5, 1 - 250 / innerHeight);
+  return Math.max(w / 2 / (t * camara.aspect), h / libre / 2 / t) * 1.06;
 }
 function cambiarVista(nombre) {
   document.querySelectorAll("#vistas button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.v === nombre)));
@@ -671,4 +673,10 @@ function bucle(ahora) {
 }
 cambiarVista("tabla");
 requestAnimationFrame(bucle);
+// Enlace directo a un átomo: #26 o #fe
+{
+  const h = norm(decodeURIComponent(location.hash.slice(1)));
+  const e = h && EL.find((x) => String(x.z) === h || norm(x.s) === h);
+  if (e) abrir(e.z);
+}
 </script>
