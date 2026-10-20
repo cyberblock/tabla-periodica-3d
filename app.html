@@ -1,0 +1,674 @@
+<title>Tabla periódica 3D</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: espacio oscuro a pantalla completa; la tabla flota en 3D, los controles quedan en los bordes. */
+:root {
+  --bg: #07080d;
+  --panel: #10121bee;
+  --line: #262a3a;
+  --fg: #e9ecf5;
+  --muted: #8b91a7;
+  --accent: #7df9ff;
+  --f-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --f-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+  --c-am: #ff7a59; --c-ae: #ffb547; --c-tm: #6f9dff; --c-la: #b98cff; --c-ac: #ff6fb1;
+  --c-pt: #4fd1b8; --c-md: #b6d65a; --c-nm: #62e07f; --c-ha: #36d3ec; --c-ng: #f2e267;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body { background: radial-gradient(ellipse 80% 60% at 50% 45%, #121628 0%, var(--bg) 70%); background-color: var(--bg); color: var(--fg); font-family: var(--f-body); overflow: hidden; }
+#escena { position: fixed; inset: 0; }
+button, input { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.cabecera { position: fixed; top: 0; left: 0; right: 0; z-index: 5; display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: flex-end; justify-content: space-between; padding-top: calc(env(safe-area-inset-top, 0px) + 18px); padding-bottom: 12px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); pointer-events: none; }
+.cabecera > * { pointer-events: auto; }
+h1 { margin: 0; font-family: var(--f-display); font-weight: 800; font-size: clamp(26px, 4vw, 44px); letter-spacing: -0.02em; line-height: 1; text-wrap: balance; }
+.sub { margin: 6px 0 0; color: var(--muted); font-size: 14px; }
+.buscar { display: flex; gap: 8px; align-items: center; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 6px 6px 6px 12px; }
+.buscar label { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.buscar input { background: transparent; border: 0; outline: 0; width: 170px; min-width: 0; }
+.buscar button { background: #1c2030; border: 1px solid var(--line); border-radius: 7px; padding: 4px 10px; cursor: pointer; }
+.buscar .error { color: var(--c-am); font-size: 12px; }
+
+.pie { position: fixed; left: 0; right: 0; bottom: 0; z-index: 5; display: flex; flex-direction: column; gap: 10px; align-items: center; padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 16px); padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); pointer-events: none; }
+.pie > * { pointer-events: auto; }
+.leyenda { display: flex; gap: 6px; overflow-x: auto; max-width: 100%; padding-bottom: 2px; scrollbar-width: none; }
+.leyenda button { flex: none; display: flex; align-items: center; gap: 6px; background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px; font-size: 12px; cursor: pointer; white-space: nowrap; }
+.leyenda button i { width: 9px; height: 9px; border-radius: 50%; background: var(--c); }
+.leyenda button[aria-pressed="true"] { border-color: var(--c); background: color-mix(in srgb, var(--c) 18%, #10121b); }
+.vistas { display: flex; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 4px; gap: 2px; }
+.vistas button { background: transparent; border: 0; border-radius: 9px; padding: 7px 14px; cursor: pointer; color: var(--muted); font-weight: 600; font-size: 14px; }
+.vistas button[aria-pressed="true"] { background: #1f2436; color: var(--fg); }
+
+/* Casillas de elemento (objetos CSS3D) */
+.el { width: 120px; height: 150px; box-sizing: border-box; position: relative; cursor: pointer; border: 1px solid color-mix(in srgb, var(--c) 55%, transparent); background: linear-gradient(160deg, color-mix(in srgb, var(--c) 22%, #0b0d15) 0%, color-mix(in srgb, var(--c) 8%, #0b0d15) 100%); box-shadow: 0 0 18px color-mix(in srgb, var(--c) 25%, transparent); border-radius: 6px; transition: box-shadow .2s, border-color .2s, opacity .3s; font-family: var(--f-body); color: var(--fg); user-select: none; }
+.el:hover, .el:focus-visible { border-color: var(--c); box-shadow: 0 0 36px color-mix(in srgb, var(--c) 60%, transparent); outline: none; }
+.el.apagado { opacity: .12; }
+.el .z { position: absolute; top: 9px; left: 10px; font-family: var(--f-mono); font-size: 15px; color: color-mix(in srgb, var(--c) 70%, #fff); }
+.el .masa { position: absolute; top: 10px; right: 10px; font-family: var(--f-mono); font-size: 11px; color: var(--muted); }
+.el .sym { position: absolute; top: 34px; left: 0; right: 0; text-align: center; font-family: var(--f-display); font-weight: 700; font-size: 56px; line-height: 1; }
+.el .nom { position: absolute; bottom: 14px; left: 4px; right: 4px; text-align: center; font-size: 13px; color: #c9cee0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Visor del átomo */
+.atomo { position: fixed; inset: 0; z-index: 20; display: grid; grid-template-columns: minmax(0, 1fr) 380px; background: #05060acc; backdrop-filter: blur(6px); }
+.lienzo-caja { position: relative; min-width: 0; min-height: 0; }
+#lienzo { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+.cerrar { position: absolute; top: calc(env(safe-area-inset-top, 0px) + 16px); left: max(16px, env(safe-area-inset-left, 0px)); background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px 14px; cursor: pointer; font-weight: 600; }
+.claves { position: absolute; bottom: calc(env(safe-area-inset-bottom, 0px) + 16px); left: max(16px, env(safe-area-inset-left, 0px)); display: flex; gap: 14px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
+.claves span { display: flex; align-items: center; gap: 6px; }
+.claves i { width: 10px; height: 10px; border-radius: 50%; }
+.ficha { background: #0d0f17; border-left: 1px solid var(--line); overflow-y: auto; padding-block: calc(env(safe-area-inset-top, 0px) + 24px) calc(env(safe-area-inset-bottom, 0px) + 24px); padding-left: 24px; padding-right: max(24px, env(safe-area-inset-right, 0px)); display: flex; flex-direction: column; gap: 20px; }
+.ficha-cab { display: flex; gap: 16px; align-items: center; }
+.f-sym { flex: none; width: 84px; height: 84px; border-radius: 10px; display: grid; place-items: center; font-family: var(--f-display); font-weight: 800; font-size: 44px; border: 1px solid var(--c); background: color-mix(in srgb, var(--c) 18%, #0b0d15); }
+.ficha h2 { margin: 0; font-family: var(--f-display); font-weight: 700; font-size: 30px; line-height: 1.05; }
+.f-cat { margin: 4px 0 0; color: var(--c); font-size: 14px; font-weight: 600; }
+.datos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 0; }
+.datos div { background: #141826; border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+.datos dt { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.datos dd { margin: 2px 0 0; font-family: var(--f-mono); font-size: 20px; font-variant-numeric: tabular-nums; }
+.bloque h3 { margin: 0 0 8px; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 600; }
+.capas { display: flex; flex-wrap: wrap; gap: 6px; }
+.capas span { font-family: var(--f-mono); font-size: 14px; background: #141826; border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; }
+.capas b { color: var(--accent); font-weight: 500; margin-right: 4px; }
+.config { font-family: var(--f-mono); font-size: 16px; margin: 0; line-height: 1.5; word-break: break-word; }
+.nota { margin: 0; font-size: 13px; color: var(--muted); line-height: 1.55; max-width: 60ch; }
+.nav { display: flex; gap: 8px; margin-top: auto; }
+.nav button { flex: 1; background: #141826; border: 1px solid var(--line); border-radius: 8px; padding: 10px; cursor: pointer; font-weight: 600; }
+
+@media (max-width: 760px) {
+  .atomo { grid-template-columns: minmax(0, 1fr); grid-template-rows: 52% 48%; }
+  .ficha { border-left: 0; border-top: 1px solid var(--line); padding-top: 18px; gap: 14px; }
+  .buscar input { width: 120px; }
+  .sub { font-size: 13px; }
+}
+</style>
+
+<div id="escena" aria-label="Tabla periódica en 3D"></div>
+
+<header class="cabecera">
+  <div>
+    <h1>Tabla periódica</h1>
+    <p class="sub">118 elementos · arrastra para girar · toca uno para ver su átomo</p>
+  </div>
+  <form class="buscar" id="buscar" autocomplete="off">
+    <label for="q">Buscar</label>
+    <input id="q" type="search" placeholder="Hierro, Fe o 26">
+    <button type="submit">Ver</button>
+    <span class="error" id="q-error" hidden>No existe</span>
+  </form>
+</header>
+
+<footer class="pie">
+  <div class="leyenda" id="leyenda" aria-label="Filtrar por familia"></div>
+  <div class="vistas" id="vistas" role="group" aria-label="Forma de la tabla">
+    <button type="button" data-v="tabla" aria-pressed="true">Tabla</button>
+    <button type="button" data-v="esfera" aria-pressed="false">Esfera</button>
+    <button type="button" data-v="helice" aria-pressed="false">Hélice</button>
+    <button type="button" data-v="rejilla" aria-pressed="false">Rejilla</button>
+  </div>
+</footer>
+
+<div class="atomo" id="atomo" hidden role="dialog" aria-modal="true" aria-labelledby="f-nombre">
+  <div class="lienzo-caja">
+    <canvas id="lienzo"></canvas>
+    <button type="button" class="cerrar" id="cerrar">← Volver a la tabla</button>
+    <div class="claves">
+      <span><i style="background:#ff5a4e"></i>Protón</span>
+      <span><i style="background:#9aa6c0"></i>Neutrón</span>
+      <span><i style="background:#7df9ff"></i>Electrón</span>
+    </div>
+  </div>
+  <aside class="ficha">
+    <div class="ficha-cab">
+      <div class="f-sym" id="f-sym"></div>
+      <div><h2 id="f-nombre"></h2><p class="f-cat" id="f-cat"></p></div>
+    </div>
+    <dl class="datos">
+      <div><dt>Número atómico</dt><dd id="f-z"></dd></div>
+      <div><dt>Masa atómica</dt><dd id="f-m"></dd></div>
+      <div><dt>Protones</dt><dd id="f-p"></dd></div>
+      <div><dt>Neutrones</dt><dd id="f-n"></dd></div>
+      <div><dt>Electrones</dt><dd id="f-e"></dd></div>
+      <div><dt>Periodo · grupo</dt><dd id="f-pg"></dd></div>
+    </dl>
+    <div class="bloque"><h3>Electrones por capa</h3><div class="capas" id="f-capas"></div></div>
+    <div class="bloque"><h3>Configuración electrónica</h3><p class="config" id="f-config"></p></div>
+    <p class="nota">Protones = número atómico. Neutrones = masa del isótopo más común (o más estable) menos los protones. El dibujo es el modelo de Bohr: los electrones no giran en órbitas reales, pero así se ven sus capas.</p>
+    <div class="nav"><button type="button" id="prev">← Anterior</button><button type="button" id="next">Siguiente →</button></div>
+  </aside>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/renderers/CSS3DRenderer.js"></script>
+<script>
+// símbolo|nombre|masa|familia
+const DATOS = `H|Hidrógeno|1.008|nm
+He|Helio|4.0026|ng
+Li|Litio|6.94|am
+Be|Berilio|9.0122|ae
+B|Boro|10.81|md
+C|Carbono|12.011|nm
+N|Nitrógeno|14.007|nm
+O|Oxígeno|15.999|nm
+F|Flúor|18.998|ha
+Ne|Neón|20.180|ng
+Na|Sodio|22.990|am
+Mg|Magnesio|24.305|ae
+Al|Aluminio|26.982|pt
+Si|Silicio|28.085|md
+P|Fósforo|30.974|nm
+S|Azufre|32.06|nm
+Cl|Cloro|35.45|ha
+Ar|Argón|39.948|ng
+K|Potasio|39.098|am
+Ca|Calcio|40.078|ae
+Sc|Escandio|44.956|tm
+Ti|Titanio|47.867|tm
+V|Vanadio|50.942|tm
+Cr|Cromo|51.996|tm
+Mn|Manganeso|54.938|tm
+Fe|Hierro|55.845|tm
+Co|Cobalto|58.933|tm
+Ni|Níquel|58.693|tm
+Cu|Cobre|63.546|tm
+Zn|Zinc|65.38|tm
+Ga|Galio|69.723|pt
+Ge|Germanio|72.630|md
+As|Arsénico|74.922|md
+Se|Selenio|78.971|nm
+Br|Bromo|79.904|ha
+Kr|Kriptón|83.798|ng
+Rb|Rubidio|85.468|am
+Sr|Estroncio|87.62|ae
+Y|Itrio|88.906|tm
+Zr|Circonio|91.224|tm
+Nb|Niobio|92.906|tm
+Mo|Molibdeno|95.95|tm
+Tc|Tecnecio|98|tm
+Ru|Rutenio|101.07|tm
+Rh|Rodio|102.91|tm
+Pd|Paladio|106.42|tm
+Ag|Plata|107.87|tm
+Cd|Cadmio|112.41|tm
+In|Indio|114.82|pt
+Sn|Estaño|118.71|pt
+Sb|Antimonio|121.76|md
+Te|Telurio|127.60|md
+I|Yodo|126.90|ha
+Xe|Xenón|131.29|ng
+Cs|Cesio|132.91|am
+Ba|Bario|137.33|ae
+La|Lantano|138.91|la
+Ce|Cerio|140.12|la
+Pr|Praseodimio|140.91|la
+Nd|Neodimio|144.24|la
+Pm|Prometio|145|la
+Sm|Samario|150.36|la
+Eu|Europio|151.96|la
+Gd|Gadolinio|157.25|la
+Tb|Terbio|158.93|la
+Dy|Disprosio|162.50|la
+Ho|Holmio|164.93|la
+Er|Erbio|167.26|la
+Tm|Tulio|168.93|la
+Yb|Iterbio|173.05|la
+Lu|Lutecio|174.97|la
+Hf|Hafnio|178.49|tm
+Ta|Tantalio|180.95|tm
+W|Wolframio|183.84|tm
+Re|Renio|186.21|tm
+Os|Osmio|190.23|tm
+Ir|Iridio|192.22|tm
+Pt|Platino|195.08|tm
+Au|Oro|196.97|tm
+Hg|Mercurio|200.59|tm
+Tl|Talio|204.38|pt
+Pb|Plomo|207.2|pt
+Bi|Bismuto|208.98|pt
+Po|Polonio|209|pt
+At|Astato|210|ha
+Rn|Radón|222|ng
+Fr|Francio|223|am
+Ra|Radio|226|ae
+Ac|Actinio|227|ac
+Th|Torio|232.04|ac
+Pa|Protactinio|231.04|ac
+U|Uranio|238.03|ac
+Np|Neptunio|237|ac
+Pu|Plutonio|244|ac
+Am|Americio|243|ac
+Cm|Curio|247|ac
+Bk|Berkelio|247|ac
+Cf|Californio|251|ac
+Es|Einstenio|252|ac
+Fm|Fermio|257|ac
+Md|Mendelevio|258|ac
+No|Nobelio|259|ac
+Lr|Lawrencio|266|ac
+Rf|Rutherfordio|267|tm
+Db|Dubnio|268|tm
+Sg|Seaborgio|269|tm
+Bh|Bohrio|270|tm
+Hs|Hasio|269|tm
+Mt|Meitnerio|278|tm
+Ds|Darmstatio|281|tm
+Rg|Roentgenio|282|tm
+Cn|Copernicio|285|tm
+Nh|Nihonio|286|pt
+Fl|Flerovio|289|pt
+Mc|Moscovio|290|pt
+Lv|Livermorio|293|pt
+Ts|Teneso|294|ha
+Og|Oganesón|294|ng`;
+
+const FAMILIAS = { am: "Metal alcalino", ae: "Metal alcalinotérreo", tm: "Metal de transición", la: "Lantánido", ac: "Actínido", pt: "Otro metal", md: "Metaloide", nm: "No metal", ha: "Halógeno", ng: "Gas noble" };
+
+// Columna y fila de cada elemento; lantánidos y actínidos van en las filas 9 y 10.
+function posicion(z) {
+  if (z === 1) return [1, 1];
+  if (z === 2) return [18, 1];
+  if (z <= 10) return [z - 3 < 2 ? z - 2 : z + 8, 2];
+  if (z <= 18) return [z - 11 < 2 ? z - 10 : z, 3];
+  if (z <= 36) return [z - 18, 4];
+  if (z <= 54) return [z - 36, 5];
+  if (z <= 56) return [z - 54, 6];
+  if (z <= 71) return [z - 54, 9];
+  if (z <= 86) return [z - 68, 6];
+  if (z <= 88) return [z - 86, 7];
+  if (z <= 103) return [z - 86, 10];
+  return [z - 100, 7];
+}
+
+const EL = DATOS.trim().split("\n").map((l, i) => {
+  const [s, n, m, c] = l.split("|");
+  const [col, fila] = posicion(i + 1);
+  return { z: i + 1, s, n, m: parseFloat(m), c, col, fila };
+});
+
+// ---------- configuración electrónica (regla de Madelung + excepciones conocidas) ----------
+const ORDEN = ["1s", "2s", "2p", "3s", "3p", "4s", "3d", "4p", "5s", "4d", "5p", "6s", "4f", "5d", "6p", "7s", "5f", "6d", "7p"];
+const CAP = { s: 2, p: 6, d: 10, f: 14 };
+const EXCEPCIONES = {
+  24: { "4s": 1, "3d": 5 }, 29: { "4s": 1, "3d": 10 }, 41: { "5s": 1, "4d": 4 }, 42: { "5s": 1, "4d": 5 },
+  44: { "5s": 1, "4d": 7 }, 45: { "5s": 1, "4d": 8 }, 46: { "5s": 0, "4d": 10 }, 47: { "5s": 1, "4d": 10 },
+  57: { "4f": 0, "5d": 1 }, 58: { "4f": 1, "5d": 1 }, 64: { "4f": 7, "5d": 1 }, 78: { "6s": 1, "5d": 9 },
+  79: { "6s": 1, "5d": 10 }, 89: { "5f": 0, "6d": 1 }, 90: { "5f": 0, "6d": 2 }, 91: { "5f": 2, "6d": 1 },
+  92: { "5f": 3, "6d": 1 }, 93: { "5f": 4, "6d": 1 }, 96: { "5f": 7, "6d": 1 }, 103: { "6d": 0, "7p": 1 },
+};
+function configuracion(z) {
+  const c = {};
+  let resto = z;
+  for (const sub of ORDEN) {
+    if (resto <= 0) break;
+    const k = Math.min(CAP[sub[1]], resto);
+    c[sub] = k;
+    resto -= k;
+  }
+  Object.assign(c, EXCEPCIONES[z] || {});
+  return c;
+}
+function capas(z) {
+  const c = configuracion(z), out = [];
+  for (const [sub, k] of Object.entries(c)) out[+sub[0] - 1] = (out[+sub[0] - 1] || 0) + k;
+  return Array.from(out, (v) => v || 0);
+}
+const SUP = "⁰¹²³⁴⁵⁶⁷⁸⁹";
+const sup = (n) => String(n).split("").map((d) => SUP[d]).join("");
+const L = "spdf";
+function textoConfig(z) {
+  const nobles = [86, 54, 36, 18, 10, 2];
+  const base = nobles.find((g) => g < z);
+  const c = configuracion(z), cb = base ? configuracion(base) : {};
+  const partes = Object.entries(c)
+    .filter(([sub, k]) => k > 0 && k !== (cb[sub] || 0))
+    .sort((a, b) => a[0][0] - b[0][0] || L.indexOf(a[0][1]) - L.indexOf(b[0][1]))
+    .map(([sub, k]) => sub + sup(k));
+  return (base ? `[${EL[base - 1].s}] ` : "") + partes.join(" ");
+}
+
+// ---------- tabla en 3D (CSS3D) ----------
+const reducido = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const escena = new THREE.Scene();
+const camara = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 1, 30000);
+camara.position.set(0, 0, 4000);
+const css = new THREE.CSS3DRenderer();
+css.setSize(innerWidth, innerHeight);
+document.getElementById("escena").appendChild(css.domElement);
+const controles = new THREE.OrbitControls(camara, css.domElement);
+controles.enableDamping = true;
+controles.minDistance = 400;
+controles.maxDistance = 16000;
+
+const objetos = [];
+EL.forEach((e) => {
+  const d = document.createElement("div");
+  d.className = "el";
+  d.tabIndex = 0;
+  d.dataset.z = e.z;
+  d.dataset.c = e.c;
+  d.setAttribute("role", "button");
+  d.setAttribute("aria-label", `${e.n}, número atómico ${e.z}`);
+  d.style.setProperty("--c", `var(--c-${e.c})`);
+  d.innerHTML = `<span class="z">${e.z}</span><span class="masa">${e.m < 100 ? e.m.toFixed(2) : e.m.toFixed(1).replace(/\.0$/, "")}</span><span class="sym">${e.s}</span><span class="nom">${e.n}</span>`;
+  const o = new THREE.CSS3DObject(d);
+  o.position.set(Math.random() * 4000 - 2000, Math.random() * 4000 - 2000, Math.random() * 4000 - 2000);
+  escena.add(o);
+  objetos.push(o);
+});
+
+const destinos = { tabla: [], esfera: [], helice: [], rejilla: [] };
+const v = new THREE.Vector3();
+EL.forEach((e, i) => {
+  const t = new THREE.Object3D();
+  t.position.set((e.col - 9.5) * 140, -(e.fila - 5.5) * 180 + (e.fila > 8 ? -40 : 0), 0);
+  destinos.tabla.push(t);
+
+  const s = new THREE.Object3D();
+  const phi = Math.acos(-1 + (2 * i) / EL.length);
+  const theta = Math.sqrt(EL.length * Math.PI) * phi;
+  s.position.setFromSphericalCoords(850, phi, theta);
+  v.copy(s.position).multiplyScalar(2);
+  s.lookAt(v);
+  destinos.esfera.push(s);
+
+  const h = new THREE.Object3D();
+  const th = i * 0.175 + Math.PI;
+  h.position.setFromCylindricalCoords(900, th, -(i * 8) + 470);
+  v.set(h.position.x * 2, h.position.y, h.position.z * 2);
+  h.lookAt(v);
+  destinos.helice.push(h);
+
+  const r = new THREE.Object3D();
+  r.position.set((i % 5) * 400 - 800, -(Math.floor(i / 5) % 5) * 400 + 800, Math.floor(i / 25) * 900 - 1800);
+  destinos.rejilla.push(r);
+});
+const TAMANO = { tabla: [2650, 1900], esfera: [1950, 1950], helice: [2100, 1350], rejilla: [2000, 2000] };
+
+let transicion = null;
+function distanciaParaVer([w, h]) {
+  const t = Math.tan(THREE.MathUtils.degToRad(camara.fov / 2));
+  return Math.max(w / 2 / (t * camara.aspect), h / 2 / t) * 1.08;
+}
+function cambiarVista(nombre) {
+  document.querySelectorAll("#vistas button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.v === nombre)));
+  const z = distanciaParaVer(TAMANO[nombre]) + (nombre === "rejilla" ? 1800 : nombre === "esfera" || nombre === "helice" ? 900 : 0);
+  transicion = {
+    inicio: performance.now(),
+    dur: reducido ? 1 : 1800,
+    desde: objetos.map((o) => ({ p: o.position.clone(), q: o.quaternion.clone() })),
+    hacia: destinos[nombre],
+    retraso: objetos.map(() => (reducido ? 0 : Math.random() * 500)),
+    camDesde: camara.position.clone(),
+    camHacia: new THREE.Vector3(0, 0, z),
+    objDesde: controles.target.clone(),
+  };
+  vistaActual = nombre;
+}
+let vistaActual = "tabla";
+const suave = (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
+function avanzarTransicion(ahora) {
+  if (!transicion) return;
+  const T = transicion;
+  let fin = true;
+  objetos.forEach((o, i) => {
+    const k = Math.min(1, Math.max(0, (ahora - T.inicio - T.retraso[i]) / T.dur));
+    if (k < 1) fin = false;
+    const e = suave(k);
+    o.position.lerpVectors(T.desde[i].p, T.hacia[i].position, e);
+    o.quaternion.copy(T.desde[i].q).slerp(T.hacia[i].quaternion, e);
+  });
+  const kc = suave(Math.min(1, (ahora - T.inicio) / (T.dur + 300)));
+  camara.position.lerpVectors(T.camDesde, T.camHacia, kc);
+  controles.target.lerpVectors(T.objDesde, new THREE.Vector3(), kc);
+  if (fin && kc >= 1) transicion = null;
+}
+
+document.getElementById("vistas").addEventListener("click", (ev) => {
+  const b = ev.target.closest("button");
+  if (b) cambiarVista(b.dataset.v);
+});
+
+// Leyenda: tocar una familia apaga las demás.
+const leyenda = document.getElementById("leyenda");
+let filtro = null;
+Object.entries(FAMILIAS).forEach(([c, nombre]) => {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.style.setProperty("--c", `var(--c-${c})`);
+  b.setAttribute("aria-pressed", "false");
+  b.innerHTML = `<i></i>${nombre}`;
+  b.addEventListener("click", () => {
+    filtro = filtro === c ? null : c;
+    leyenda.querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", "false"));
+    if (filtro) b.setAttribute("aria-pressed", "true");
+    objetos.forEach((o) => o.element.classList.toggle("apagado", Boolean(filtro) && o.element.dataset.c !== filtro));
+  });
+  leyenda.appendChild(b);
+});
+
+// Toque sin arrastre sobre una casilla = abrir el átomo.
+let pulsado = null;
+css.domElement.addEventListener("pointerdown", (ev) => {
+  pulsado = { x: ev.clientX, y: ev.clientY, el: ev.target.closest(".el") };
+}, true);
+window.addEventListener("pointerup", (ev) => {
+  if (pulsado && pulsado.el && Math.hypot(ev.clientX - pulsado.x, ev.clientY - pulsado.y) < 8) abrir(+pulsado.el.dataset.z);
+  pulsado = null;
+}, true);
+css.domElement.addEventListener("keydown", (ev) => {
+  const el = ev.target.closest && ev.target.closest(".el");
+  if (el && (ev.key === "Enter" || ev.key === " ")) {
+    ev.preventDefault();
+    abrir(+el.dataset.z);
+  }
+});
+
+const norm = (s) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
+document.getElementById("buscar").addEventListener("submit", (ev) => {
+  ev.preventDefault();
+  const q = norm(document.getElementById("q").value);
+  const e = EL.find((x) => String(x.z) === q || norm(x.s) === q || norm(x.n) === q) || EL.find((x) => q.length > 2 && norm(x.n).startsWith(q));
+  document.getElementById("q-error").hidden = Boolean(e) || !q;
+  if (e) abrir(e.z);
+});
+
+// ---------- visor del átomo (WebGL) ----------
+const lienzo = document.getElementById("lienzo");
+const ra = new THREE.WebGLRenderer({ canvas: lienzo, antialias: true, alpha: true });
+ra.setPixelRatio(Math.min(devicePixelRatio, 2));
+const ea = new THREE.Scene();
+const ca = new THREE.PerspectiveCamera(45, 1, 0.1, 3000);
+const ctlA = new THREE.OrbitControls(ca, lienzo);
+ctlA.enableDamping = true;
+ctlA.enablePan = false;
+ea.add(new THREE.AmbientLight(0xffffff, 0.5));
+const luz = new THREE.PointLight(0xffffff, 1.2);
+luz.position.set(60, 80, 120);
+ea.add(luz);
+const luz2 = new THREE.DirectionalLight(0x88aaff, 0.5);
+luz2.position.set(-80, -40, -60);
+ea.add(luz2);
+
+function texturaBrillo(color) {
+  const c = document.createElement("canvas");
+  c.width = c.height = 64;
+  const g = c.getContext("2d");
+  const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  gr.addColorStop(0, color);
+  gr.addColorStop(0.35, color + "88");
+  gr.addColorStop(1, color + "00");
+  g.fillStyle = gr;
+  g.fillRect(0, 0, 64, 64);
+  return new THREE.CanvasTexture(c);
+}
+const brilloElectron = texturaBrillo("#7df9ff");
+const brilloNucleo = texturaBrillo("#ff8a5c");
+
+// Estrellas de fondo
+{
+  const g = new THREE.BufferGeometry();
+  const p = new Float32Array(1500 * 3);
+  for (let i = 0; i < p.length; i++) p[i] = (Math.random() - 0.5) * 1600;
+  g.setAttribute("position", new THREE.BufferAttribute(p, 3));
+  ea.add(new THREE.Points(g, new THREE.PointsMaterial({ color: 0x8890b0, size: 1.4, sizeAttenuation: true, transparent: true, opacity: 0.6 })));
+}
+
+let atomo = null, nucleo = null, electrones = [], actual = 1;
+const azar = (semilla) => () => ((semilla = (semilla * 16807) % 2147483647) / 2147483647);
+
+function liberar(obj) {
+  obj.traverse((o) => {
+    if (o.geometry) o.geometry.dispose();
+    if (o.material) o.material.dispose();
+  });
+}
+
+function construir(e) {
+  if (atomo) {
+    ea.remove(atomo);
+    liberar(atomo);
+  }
+  atomo = new THREE.Group();
+  electrones = [];
+  const r = azar(e.z * 7919 + 13);
+  const A = Math.max(e.z, Math.round(e.m));
+  const N = A - e.z;
+
+  // Núcleo: protones y neutrones mezclados y apretados en una bola.
+  const tipos = Array.from({ length: A }, (_, i) => i < e.z);
+  for (let i = tipos.length - 1; i > 0; i--) {
+    const j = Math.floor(r() * (i + 1));
+    [tipos[i], tipos[j]] = [tipos[j], tipos[i]];
+  }
+  const R = A === 1 ? 0 : 1.12 * Math.cbrt(A);
+  const inst = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 20, 14), new THREE.MeshStandardMaterial({ roughness: 0.4, metalness: 0.1 }), A);
+  const m = new THREE.Matrix4(), col = new THREE.Color(), rojo = new THREE.Color(0xff5a4e), gris = new THREE.Color(0x9aa6c0);
+  for (let i = 0; i < A; i++) {
+    const y = 1 - (2 * (i + 0.5)) / A;
+    const rr = Math.sqrt(1 - y * y);
+    const th = i * 2.399963;
+    const rad = R * Math.cbrt((i + 0.5) / A) * (0.9 + r() * 0.12);
+    m.makeTranslation(Math.cos(th) * rr * rad, y * rad, Math.sin(th) * rr * rad);
+    inst.setMatrixAt(i, m);
+    inst.setColorAt(i, col.copy(tipos[i] ? rojo : gris));
+  }
+  inst.instanceColor.needsUpdate = true;
+  nucleo = new THREE.Group();
+  nucleo.add(inst);
+  const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: brilloNucleo, transparent: true, opacity: 0.45, depthWrite: false, blending: THREE.AdditiveBlending }));
+  halo.scale.setScalar((R + 1) * 5);
+  nucleo.add(halo);
+  atomo.add(nucleo);
+
+  // Capas de electrones: un anillo inclinado por capa, sus electrones repartidos y girando.
+  const cs = capas(e.z);
+  const r0 = R + 6, paso = 5.2;
+  const geoE = new THREE.SphereGeometry(0.6, 14, 10);
+  cs.forEach((n, k) => {
+    const radio = r0 + k * paso;
+    const capa = new THREE.Group();
+    capa.rotation.set((r() - 0.5) * 0.9, (r() - 0.5) * 0.9, (r() - 0.5) * 0.6);
+    const pts = [];
+    for (let a = 0; a <= 128; a++) pts.push(new THREE.Vector3(Math.cos((a / 128) * Math.PI * 2) * radio, 0, Math.sin((a / 128) * Math.PI * 2) * radio));
+    capa.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: 0x55607e, transparent: true, opacity: 0.7 })));
+    const base = r() * Math.PI * 2;
+    const vel = (0.9 / Math.pow(k + 1, 0.7)) * (k % 2 ? -1 : 1) * (reducido ? 0.15 : 1);
+    for (let j = 0; j < n; j++) {
+      const em = new THREE.Mesh(geoE, new THREE.MeshBasicMaterial({ color: 0x7df9ff }));
+      const g = new THREE.Sprite(new THREE.SpriteMaterial({ map: brilloElectron, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+      g.scale.setScalar(3.6);
+      em.add(g);
+      capa.add(em);
+      electrones.push({ m: em, radio, ang: base + (j / n) * Math.PI * 2, vel });
+    }
+    atomo.add(capa);
+  });
+  ea.add(atomo);
+
+  const lejos = (r0 + (cs.length - 1) * paso) * 2.9;
+  ca.position.set(0, lejos * 0.3, lejos);
+  ctlA.target.set(0, 0, 0);
+  ctlA.minDistance = R + 4;
+  ctlA.maxDistance = lejos * 3;
+
+  // Ficha
+  const fam = `var(--c-${e.c})`;
+  document.querySelector(".ficha").style.setProperty("--c", fam);
+  document.getElementById("f-sym").textContent = e.s;
+  document.getElementById("f-nombre").textContent = e.n;
+  document.getElementById("f-cat").textContent = FAMILIAS[e.c] + (e.z >= 109 ? " (propiedades previstas)" : "");
+  document.getElementById("f-z").textContent = e.z;
+  document.getElementById("f-m").textContent = e.m + " u";
+  document.getElementById("f-p").textContent = e.z;
+  document.getElementById("f-n").textContent = N;
+  document.getElementById("f-e").textContent = e.z;
+  document.getElementById("f-pg").textContent = e.fila > 8 ? `${e.fila - 3} · ${e.fila === 9 ? "lantánidos" : "actínidos"}` : `${e.fila} · ${e.col}`;
+  document.getElementById("f-capas").innerHTML = cs.map((n, k) => `<span><b>${"KLMNOPQ"[k]}</b>${n}</span>`).join("");
+  document.getElementById("f-config").textContent = textoConfig(e.z);
+}
+
+const visor = document.getElementById("atomo");
+function ajustarVisor() {
+  const w = lienzo.clientWidth, h = lienzo.clientHeight;
+  if (!w || !h) return;
+  ra.setSize(w, h, false);
+  ca.aspect = w / h;
+  ca.updateProjectionMatrix();
+}
+new ResizeObserver(ajustarVisor).observe(lienzo);
+function abrir(z) {
+  actual = Math.min(118, Math.max(1, z));
+  visor.hidden = false;
+  ajustarVisor();
+  construir(EL[actual - 1]);
+  document.getElementById("cerrar").focus();
+}
+function cerrar() {
+  visor.hidden = true;
+  const el = objetos[actual - 1].element;
+  el.focus({ preventScroll: true });
+}
+document.getElementById("cerrar").addEventListener("click", cerrar);
+document.getElementById("prev").addEventListener("click", () => abrir(actual === 1 ? 118 : actual - 1));
+document.getElementById("next").addEventListener("click", () => abrir(actual === 118 ? 1 : actual + 1));
+addEventListener("keydown", (ev) => {
+  if (visor.hidden) return;
+  if (ev.key === "Escape") cerrar();
+  if (ev.key === "ArrowRight") abrir(actual === 118 ? 1 : actual + 1);
+  if (ev.key === "ArrowLeft") abrir(actual === 1 ? 118 : actual - 1);
+});
+
+addEventListener("resize", () => {
+  camara.aspect = innerWidth / innerHeight;
+  camara.updateProjectionMatrix();
+  css.setSize(innerWidth, innerHeight);
+});
+
+let antes = performance.now();
+function bucle(ahora) {
+  requestAnimationFrame(bucle);
+  const dt = Math.min(0.05, (ahora - antes) / 1000);
+  antes = ahora;
+  if (visor.hidden) {
+    avanzarTransicion(ahora);
+    controles.update();
+    css.render(escena, camara);
+  } else {
+    electrones.forEach((x) => {
+      x.ang += x.vel * dt;
+      x.m.position.set(Math.cos(x.ang) * x.radio, 0, Math.sin(x.ang) * x.radio);
+    });
+    if (nucleo) nucleo.rotation.y += dt * 0.25;
+    ctlA.update();
+    ra.render(ea, ca);
+  }
+}
+cambiarVista("tabla");
+requestAnimationFrame(bucle);
+</script>
